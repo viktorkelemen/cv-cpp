@@ -28,6 +28,8 @@ target_sources(cv_sender_app
         src/Main.cpp
         src/MainComponent.cpp
         src/MainComponent.h
+        src/GridComponent.cpp
+        src/GridComponent.h
 )
 
 target_compile_definitions(cv_sender_app
