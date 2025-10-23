@@ -26,6 +26,9 @@ On macOS the resulting app bundle appears at `build/cv_sender_app_artefacts/Debu
 - Toggling the **Send CV** button pushes a constant `+1.0f` value through every
   active output channel in the audio callback, mimicking a high CV level.
 - Stop the stream or toggle the button off to drop the output back to `0.0f`.
+- Grid cells now show their note name, and the sidebar lets you route each
+  hardware output to the sequencer's pitch lane, gate pulses (~8 V), clock pulse,
+  or manual CV source with per-voice calibration offsets.
 
 Extend this by replacing the constant with envelopes, LFO shapes, or other DSP
 blocks, and by exposing more controls in the GUI.

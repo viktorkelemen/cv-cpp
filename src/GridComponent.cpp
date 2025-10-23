@@ -1,6 +1,7 @@
 #include "GridComponent.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace cvseq
 {
@@ -129,6 +130,11 @@ void GridComponent::drawGrid(juce::Graphics& g)
                 g.setColour(juce::Colours::orange.withAlpha(0.9f));
                 g.drawRect(cellBounds.reduced(2.0f), 3.0f);
             }
+
+            static const juce::Font noteFont(juce::FontOptions(12.0f, juce::Font::bold));
+            g.setColour(juce::Colours::white.withAlpha(0.8f));
+            g.setFont(noteFont);
+            g.drawText(noteNameForCell(cell), cellBounds.reduced(4.0f), juce::Justification::bottomRight, false);
         }
     }
 
@@ -143,6 +149,15 @@ void GridComponent::drawGrid(juce::Graphics& g)
         const float yPos = bounds.getY() + y * cellHeight;
         g.drawLine(bounds.getX(), yPos, bounds.getRight(), yPos);
     }
+}
+
+juce::String GridComponent::noteNameForCell(const GridCell& cell) const
+{
+    static constexpr const char* noteNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    const int semitones = cell.semitones;
+    const int noteIndex = ((semitones % 12) + 12) % 12;
+    const int octave = static_cast<int>(std::floor(static_cast<float>(semitones) / 12.0f)) + 2;
+    return juce::String(noteNames[noteIndex]) + juce::String(octave);
 }
 
 } // namespace cvseq

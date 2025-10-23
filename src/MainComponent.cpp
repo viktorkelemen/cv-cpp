@@ -8,7 +8,8 @@
 
 namespace
 {
-constexpr float kHighVoltageValue = 1.0f;  // Represents +1.0 (depends on interface scaling)
+constexpr float kHighVoltageValue = 1.0f;   // Represents +1.0 (depends on interface scaling)
+constexpr float kGateHighVoltage = 0.8f;    // Gate/clock high level (digital)
 constexpr int kStepsPerBeat = 4;            // 16th-note grid
 
 struct ScaleDescriptor
@@ -96,6 +97,9 @@ MainComponent::MainComponent()
     for (int i = 0; i < kVoiceCalibrationCount; ++i)
     {
         voiceCalibrationDigital[i].store(0.0f);
+        voicePitchDigital[i].store(0.0f);
+        voiceGateDigital[i].store(0.0f);
+        voiceGateSamplesRemaining[i].store(0);
 
         auto label = std::make_unique<juce::Label>();
         label->setJustificationType(juce::Justification::centredLeft);
@@ -121,6 +125,8 @@ MainComponent::MainComponent()
 
         updateVoiceCalibration(i, 0.0);
     }
+
+    initialiseChannelSelectors();
 
     addAndMakeVisible(gridComponent);
     gridComponent.onCellSelected = [this](int x, int y)
@@ -187,41 +193,94 @@ void MainComponent::resized()
     }
 
     sidebar.removeFromTop(6);
+
+    for (int i = 0; i < kChannelSelectorCount; ++i)
+    {
+        if (!channelSelectorLabels[i] || !channelSelectors[i])
+            continue;
+
+        auto row = sidebar.removeFromTop(controlHeight);
+        channelSelectorLabels[i]->setBounds(row.removeFromLeft(140));
+        row.removeFromLeft(6);
+        channelSelectors[i]->setBounds(row);
+        sidebar.removeFromTop(6);
+    }
+
+    sidebar.removeFromTop(6);
     deviceSelector.setBounds(sidebar);
 
     bounds.removeFromLeft(12);
     gridComponent.setBounds(bounds);
 }
 
-void MainComponent::audioDeviceIOCallbackWithContext(const float* const* /*inputChannelData*/,
-                                                     int /*numInputChannels*/,
+void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
+                                                     int numInputChannels,
                                                      float* const* outputChannelData,
                                                      int numOutputChannels,
                                                      int numSamples,
-                                                     const juce::AudioIODeviceCallbackContext& /*context*/)
+                                                     const juce::AudioIODeviceCallbackContext& context)
 {
+    juce::ignoreUnused(inputChannelData, numInputChannels, context);
+
+    updateGateAndClockTimers(numSamples);
+
+    const float manualValue = outputValue.load();
     const bool sequencerActive = useSequencerOutput.load();
-    const float baseValue = sequencerActive ? sequencerOutputValue.load()
-                                            : outputValue.load();
+    const float voicePitch = voicePitchDigital[0].load() + voiceCalibrationDigital[0].load();
+    const float voiceGate = voiceGateDigital[0].load();
+    const float clockValue = clockDigital.load();
 
     for (int channel = 0; channel < numOutputChannels; ++channel)
     {
-        if (auto* channelData = outputChannelData[channel])
+        float sampleValue = 0.0f;
+        const ChannelSource source = channel < kChannelSelectorCount ? channelAssignments[channel]
+                                                                    : ChannelSource::none;
+
+        switch (source)
         {
-            float finalValue = baseValue;
-            if (sequencerActive)
-            {
-                const int index = std::clamp(channel, 0, kVoiceCalibrationCount - 1);
-                finalValue += voiceCalibrationDigital[index].load();
-            }
-            finalValue = juce::jlimit(-1.0f, 1.0f, finalValue);
-            juce::FloatVectorOperations::fill(channelData, finalValue, numSamples);
+            case ChannelSource::manualCv:
+                sampleValue = manualValue;
+                break;
+            case ChannelSource::sequencerPitch1:
+                sampleValue = sequencerActive ? voicePitch : 0.0f;
+                break;
+            case ChannelSource::sequencerGate1:
+                sampleValue = sequencerActive ? voiceGate : 0.0f;
+                break;
+            case ChannelSource::clockOut:
+                sampleValue = sequencerActive ? clockValue : 0.0f;
+                break;
+            case ChannelSource::none:
+            default:
+                sampleValue = 0.0f;
+                break;
         }
+
+        if (auto* channelData = outputChannelData[channel])
+            juce::FloatVectorOperations::fill(channelData, juce::jlimit(-1.0f, 1.0f, sampleValue), numSamples);
     }
 }
 
-void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* /*device*/)
+void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
+    if (device != nullptr)
+    {
+        const double sampleRate = device->getCurrentSampleRate();
+        if (sampleRate > 0.0)
+            currentSampleRate = sampleRate;
+    }
+
+    gateHoldSamples = std::max(1, static_cast<int>(currentSampleRate * 0.01));
+    clockHoldSamples = std::max(1, static_cast<int>(currentSampleRate * 0.005));
+
+    for (int i = 0; i < kVoiceCalibrationCount; ++i)
+    {
+        voiceGateSamplesRemaining[i].store(0);
+        voiceGateDigital[i].store(0.0f);
+    }
+    clockSamplesRemaining.store(0);
+    clockDigital.store(0.0f);
+
     juce::MessageManager::callAsync([this]()
     {
         statusLabel.setText("Streaming CV. Toggle the button to start/stop.", juce::dontSendNotification);
@@ -230,6 +289,14 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* /*device*/)
 
 void MainComponent::audioDeviceStopped()
 {
+    for (int i = 0; i < kVoiceCalibrationCount; ++i)
+    {
+        voiceGateSamplesRemaining[i].store(0);
+        voiceGateDigital[i].store(0.0f);
+    }
+    clockSamplesRemaining.store(0);
+    clockDigital.store(0.0f);
+
     juce::MessageManager::callAsync([this]()
     {
         statusLabel.setText("Audio device idle", juce::dontSendNotification);
@@ -311,6 +378,117 @@ void MainComponent::initialiseScaleSelector()
     }
 }
 
+void MainComponent::initialiseChannelSelectors()
+{
+    static const char* labels[kChannelSelectorCount] = {
+        "Channel 1",
+        "Channel 2",
+        "Channel 3",
+        "Channel 4",
+    };
+
+    for (int i = 0; i < kChannelSelectorCount; ++i)
+    {
+        auto label = std::make_unique<juce::Label>();
+        label->setJustificationType(juce::Justification::centredLeft);
+        label->setText(labels[i], juce::dontSendNotification);
+        channelSelectorLabels[i] = std::move(label);
+        addAndMakeVisible(*channelSelectorLabels[i]);
+
+        auto combo = std::make_unique<juce::ComboBox>();
+        combo->addItem("None", channelSourceToMenuId(ChannelSource::none));
+        combo->addItem("Manual CV", channelSourceToMenuId(ChannelSource::manualCv));
+        combo->addItem("Voice 1 Pitch", channelSourceToMenuId(ChannelSource::sequencerPitch1));
+        combo->addItem("Voice 1 Gate", channelSourceToMenuId(ChannelSource::sequencerGate1));
+        combo->addItem("Clock", channelSourceToMenuId(ChannelSource::clockOut));
+        combo->onChange = [this, i]()
+        {
+            if (channelSelectors[i])
+                updateChannelAssignment(i, channelSelectors[i]->getSelectedId());
+        };
+        channelSelectors[i] = std::move(combo);
+        addAndMakeVisible(*channelSelectors[i]);
+    }
+
+    channelAssignments = {
+        ChannelSource::sequencerPitch1,
+        ChannelSource::sequencerGate1,
+        ChannelSource::manualCv,
+        ChannelSource::clockOut,
+    };
+
+    for (int i = 0; i < kChannelSelectorCount; ++i)
+        if (channelSelectors[i])
+            channelSelectors[i]->setSelectedId(channelSourceToMenuId(channelAssignments[i]), juce::dontSendNotification);
+}
+
+int MainComponent::channelSourceToMenuId(ChannelSource source)
+{
+    switch (source)
+    {
+        case ChannelSource::none: return 1;
+        case ChannelSource::manualCv: return 2;
+        case ChannelSource::sequencerPitch1: return 3;
+        case ChannelSource::sequencerGate1: return 4;
+        case ChannelSource::clockOut: return 5;
+    }
+    return 1;
+}
+
+ChannelSource MainComponent::menuIdToChannelSource(int id)
+{
+    switch (id)
+    {
+        case 2: return ChannelSource::manualCv;
+        case 3: return ChannelSource::sequencerPitch1;
+        case 4: return ChannelSource::sequencerGate1;
+        case 5: return ChannelSource::clockOut;
+        case 1:
+        default:
+            return ChannelSource::none;
+    }
+}
+
+void MainComponent::updateChannelAssignment(int channelIndex, int selectionId)
+{
+    if (channelIndex < 0 || channelIndex >= kChannelSelectorCount)
+        return;
+
+    channelAssignments[channelIndex] = menuIdToChannelSource(selectionId);
+}
+
+void MainComponent::updateGateAndClockTimers(int samplesPerBlock)
+{
+    samplesPerBlock = std::max(1, samplesPerBlock);
+
+    for (int i = 0; i < kVoiceCalibrationCount; ++i)
+    {
+        const int remaining = voiceGateSamplesRemaining[i].load();
+        if (remaining > 0)
+        {
+            voiceGateDigital[i].store(kGateHighVoltage);
+            const int newRemaining = std::max(0, remaining - samplesPerBlock);
+            voiceGateSamplesRemaining[i].store(newRemaining);
+        }
+        else
+        {
+            voiceGateDigital[i].store(0.0f);
+        }
+    }
+
+    const int clockRemaining = clockSamplesRemaining.load();
+    if (clockRemaining > 0)
+    {
+        clockDigital.store(kGateHighVoltage);
+        const int newRemaining = std::max(0, clockRemaining - samplesPerBlock);
+        clockSamplesRemaining.store(newRemaining);
+    }
+    else
+    {
+        clockDigital.store(0.0f);
+    }
+}
+
 void MainComponent::startSequencerPlayback()
 {
     const double bpm = std::max(20.0, gridModel.getCurrentBpm());
@@ -329,6 +507,14 @@ void MainComponent::stopSequencerPlayback()
     sequencerOutputValue.store(0.0f);
     currentStepIndex = 0;
     gridComponent.setPlayheadCell({ -1, -1 });
+
+    for (int i = 0; i < kVoiceCalibrationCount; ++i)
+    {
+        voiceGateSamplesRemaining[i].store(0);
+        voiceGateDigital[i].store(0.0f);
+    }
+    clockSamplesRemaining.store(0);
+    clockDigital.store(0.0f);
 }
 
 void MainComponent::timerCallback()
@@ -352,15 +538,32 @@ void MainComponent::advanceSequencerStep()
 
     const auto& cell = gridModel.cellAt(x, y);
 
-    float output = 0.0f;
+    const float pitchValue = cellSemitoneToVoltage(cell);
+    voicePitchDigital[0].store(pitchValue);
+
+    bool triggered = false;
     if (cell.active)
     {
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-        if (dist(rng) <= cell.probability)
-            output = cellSemitoneToVoltage(cell);
+        triggered = dist(rng) <= cell.probability;
     }
 
-    sequencerOutputValue.store(output);
+    if (triggered)
+    {
+        voiceGateSamplesRemaining[0].store(std::max(1, gateHoldSamples));
+        voiceGateDigital[0].store(kGateHighVoltage);
+    }
+    else
+    {
+        voiceGateSamplesRemaining[0].store(0);
+        voiceGateDigital[0].store(0.0f);
+    }
+
+    clockSamplesRemaining.store(std::max(1, clockHoldSamples));
+    clockDigital.store(kGateHighVoltage);
+
+    const float calibratedPitch = pitchValue + voiceCalibrationDigital[0].load();
+    sequencerOutputValue.store(calibratedPitch);
     updateSelectedCellInfo({ x, y });
     gridComponent.setPlayheadCell({ x, y });
 

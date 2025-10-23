@@ -29,6 +29,7 @@ public:
 private:
     void handleSelectionEvent(const juce::MouseEvent& event);
     void drawGrid(juce::Graphics& g);
+    juce::String noteNameForCell(const GridCell& cell) const;
 
     GridModel& model;
     juce::Point<int> selectedCell_ { -1, -1 };

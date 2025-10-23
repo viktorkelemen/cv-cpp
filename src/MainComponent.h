@@ -2,12 +2,22 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
+#include <atomic>
 #include <array>
 #include <memory>
 #include <random>
 
 #include "GridComponent.h"
 #include "GridModel.h"
+
+enum class ChannelSource
+{
+    none = 0,
+    manualCv,
+    sequencerPitch1,
+    sequencerGate1,
+    clockOut,
+};
 
 class MainComponent final : public juce::Component,
                             private juce::AudioIODeviceCallback,
@@ -39,6 +49,11 @@ private:
     void advanceSequencerStep();
     float cellSemitoneToVoltage(const cvseq::GridCell& cell) const;
     void updateVoiceCalibration(int index, double semitoneOffset);
+    void initialiseChannelSelectors();
+    void updateChannelAssignment(int channelIndex, int selectionId);
+    static int channelSourceToMenuId(ChannelSource source);
+    static ChannelSource menuIdToChannelSource(int id);
+    void updateGateAndClockTimers(int samplesPerBlock);
 
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
@@ -60,6 +75,20 @@ private:
     std::array<std::unique_ptr<juce::Slider>, kVoiceCalibrationCount> voiceOffsetSliders;
     std::array<std::unique_ptr<juce::Label>, kVoiceCalibrationCount> voiceOffsetLabels;
     std::array<std::atomic<float>, kVoiceCalibrationCount> voiceCalibrationDigital {};
+    std::array<std::atomic<float>, kVoiceCalibrationCount> voicePitchDigital {};
+    std::array<std::atomic<float>, kVoiceCalibrationCount> voiceGateDigital {};
+    std::array<std::atomic<int>, kVoiceCalibrationCount> voiceGateSamplesRemaining {};
+
+    static constexpr int kChannelSelectorCount = 4;
+    std::array<std::unique_ptr<juce::Label>, kChannelSelectorCount> channelSelectorLabels;
+    std::array<std::unique_ptr<juce::ComboBox>, kChannelSelectorCount> channelSelectors;
+    std::array<ChannelSource, kChannelSelectorCount> channelAssignments {};
+
+    std::atomic<int> clockSamplesRemaining { 0 };
+    std::atomic<float> clockDigital { 0.0f };
+    double currentSampleRate = 48000.0;
+    int gateHoldSamples = 480;
+    int clockHoldSamples = 240;
     std::mt19937 rng;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
