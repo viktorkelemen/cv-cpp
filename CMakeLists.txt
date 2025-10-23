@@ -16,6 +16,13 @@ juce_add_gui_app(cv_sender_app
     COMPANY_NAME "cv-cpp"
 )
 
+add_library(cv_core STATIC
+    src/GridModel.cpp
+    src/GridModel.h
+)
+
+target_include_directories(cv_core PUBLIC src)
+
 target_sources(cv_sender_app
     PRIVATE
         src/Main.cpp
@@ -31,9 +38,23 @@ target_compile_definitions(cv_sender_app
 
 target_link_libraries(cv_sender_app
     PRIVATE
+        cv_core
         juce::juce_gui_basics
         juce::juce_gui_extra
         juce::juce_audio_basics
         juce::juce_audio_devices
         juce::juce_audio_utils
 )
+
+enable_testing()
+
+add_executable(grid_model_tests
+    tests/GridModelTests.cpp
+)
+
+target_link_libraries(grid_model_tests
+    PRIVATE
+        cv_core
+)
+
+add_test(NAME GridModelTests COMMAND grid_model_tests)

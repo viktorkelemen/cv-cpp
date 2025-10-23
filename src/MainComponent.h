@@ -2,6 +2,8 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
+#include "GridModel.h"
+
 class MainComponent final : public juce::Component,
                             private juce::AudioIODeviceCallback
 {
@@ -29,6 +31,7 @@ private:
     juce::Label statusLabel;
 
     std::atomic<float> outputValue { 0.0f };
+    cvseq::GridModel gridModel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
