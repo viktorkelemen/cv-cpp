@@ -56,6 +56,8 @@ private:
     void updateGateAndClockTimers(int samplesPerBlock);
 
     juce::AudioDeviceManager deviceManager;
+    juce::Viewport sidebarViewport;
+    juce::Component sidebarContent;
     juce::AudioDeviceSelectorComponent deviceSelector;
     juce::TextButton sendCvButton { "Send CV" };
     juce::TextButton startSequencerButton { "Start Sequencer" };
@@ -79,7 +81,7 @@ private:
     std::array<std::atomic<float>, kVoiceCalibrationCount> voiceGateDigital {};
     std::array<std::atomic<int>, kVoiceCalibrationCount> voiceGateSamplesRemaining {};
 
-    static constexpr int kChannelSelectorCount = 4;
+    static constexpr int kChannelSelectorCount = 8;
     std::array<std::unique_ptr<juce::Label>, kChannelSelectorCount> channelSelectorLabels;
     std::array<std::unique_ptr<juce::ComboBox>, kChannelSelectorCount> channelSelectors;
     std::array<ChannelSource, kChannelSelectorCount> channelAssignments {};

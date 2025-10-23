@@ -39,7 +39,11 @@ MainComponent::MainComponent()
       gridComponent(gridModel),
       rng(std::random_device{}())
 {
-    addAndMakeVisible(deviceSelector);
+    addAndMakeVisible(sidebarViewport);
+    sidebarViewport.setViewedComponent(&sidebarContent, false);
+    sidebarViewport.setScrollBarsShown(true, false);
+
+    sidebarContent.addAndMakeVisible(deviceSelector);
 
     sendCvButton.setClickingTogglesState(true);
     sendCvButton.onClick = [this]()
@@ -48,7 +52,7 @@ MainComponent::MainComponent()
         outputValue.store(active ? kHighVoltageValue : 0.0f);
         updateButtonState();
     };
-    addAndMakeVisible(sendCvButton);
+    sidebarContent.addAndMakeVisible(sendCvButton);
 
     startSequencerButton.setClickingTogglesState(true);
     startSequencerButton.onClick = [this]()
@@ -67,7 +71,7 @@ MainComponent::MainComponent()
 
         updateSequencerState(shouldRun);
     };
-    addAndMakeVisible(startSequencerButton);
+    sidebarContent.addAndMakeVisible(startSequencerButton);
 
     randomizeButton.onClick = [this]()
     {
@@ -77,22 +81,22 @@ MainComponent::MainComponent()
         gridComponent.setPlayheadCell({ -1, -1 });
         updateSelectedCellInfo(gridComponent.getSelectedCell());
     };
-    addAndMakeVisible(randomizeButton);
+    sidebarContent.addAndMakeVisible(randomizeButton);
 
     scaleLabel.setText("Scale", juce::dontSendNotification);
     scaleLabel.setJustificationType(juce::Justification::centredLeft);
-    addAndMakeVisible(scaleLabel);
+    sidebarContent.addAndMakeVisible(scaleLabel);
 
     initialiseScaleSelector();
-    addAndMakeVisible(scaleSelector);
+    sidebarContent.addAndMakeVisible(scaleSelector);
 
     statusLabel.setJustificationType(juce::Justification::centredLeft);
     statusLabel.setText("Audio device idle", juce::dontSendNotification);
-    addAndMakeVisible(statusLabel);
+    sidebarContent.addAndMakeVisible(statusLabel);
 
     selectedCellLabel.setJustificationType(juce::Justification::centredLeft);
     selectedCellLabel.setText("Selected cell: none", juce::dontSendNotification);
-    addAndMakeVisible(selectedCellLabel);
+    sidebarContent.addAndMakeVisible(selectedCellLabel);
 
     for (int i = 0; i < kVoiceCalibrationCount; ++i)
     {
@@ -105,7 +109,7 @@ MainComponent::MainComponent()
         label->setJustificationType(juce::Justification::centredLeft);
         label->setText("Voice " + juce::String(i + 1) + " Offset", juce::dontSendNotification);
         voiceOffsetLabels[i] = std::move(label);
-        addAndMakeVisible(*voiceOffsetLabels[i]);
+        sidebarContent.addAndMakeVisible(*voiceOffsetLabels[i]);
 
         auto slider = std::make_unique<juce::Slider>();
         slider->setSliderStyle(juce::Slider::LinearHorizontal);
@@ -121,7 +125,7 @@ MainComponent::MainComponent()
                 updateVoiceCalibration(i, voiceOffsetSliders[i]->getValue());
         };
         voiceOffsetSliders[i] = std::move(slider);
-        addAndMakeVisible(*voiceOffsetSliders[i]);
+        sidebarContent.addAndMakeVisible(*voiceOffsetSliders[i]);
 
         updateVoiceCalibration(i, 0.0);
     }
@@ -154,60 +158,77 @@ MainComponent::~MainComponent()
 void MainComponent::resized()
 {
     auto bounds = getLocalBounds().reduced(12);
-    auto sidebar = bounds.removeFromLeft(280);
+    const int sidebarWidth = juce::jlimit(260, 360, bounds.getWidth() / 2);
+    auto sidebarBounds = bounds.removeFromLeft(sidebarWidth);
+    sidebarViewport.setBounds(sidebarBounds);
 
+    const int scrollbarAllowance = sidebarViewport.getScrollBarThickness();
+    const int contentWidth = juce::jmax(200, sidebarBounds.getWidth() - scrollbarAllowance);
     const int controlHeight = 36;
+    const int gapSmall = 6;
+    const int gapMedium = 8;
+    const int gapLarge = 10;
 
-    auto cvRow = sidebar.removeFromTop(controlHeight);
-    sendCvButton.setBounds(cvRow.removeFromLeft(120));
-    cvRow.removeFromLeft(8);
-    statusLabel.setBounds(cvRow);
+    int y = 0;
 
-    sidebar.removeFromTop(10);
-    startSequencerButton.setBounds(sidebar.removeFromTop(controlHeight));
+    {
+        juce::Rectangle<int> row(0, y, contentWidth, controlHeight);
+        sendCvButton.setBounds(row.removeFromLeft(120));
+        row.removeFromLeft(gapSmall);
+        statusLabel.setBounds(row);
+        y += controlHeight + gapLarge;
+    }
 
-    sidebar.removeFromTop(8);
-    randomizeButton.setBounds(sidebar.removeFromTop(controlHeight));
+    startSequencerButton.setBounds(0, y, contentWidth, controlHeight);
+    y += controlHeight + gapMedium;
 
-    sidebar.removeFromTop(8);
-    auto scaleRow = sidebar.removeFromTop(controlHeight);
-    scaleLabel.setBounds(scaleRow.removeFromLeft(90));
-    scaleRow.removeFromLeft(6);
-    scaleSelector.setBounds(scaleRow);
+    randomizeButton.setBounds(0, y, contentWidth, controlHeight);
+    y += controlHeight + gapMedium;
 
-    sidebar.removeFromTop(8);
-    selectedCellLabel.setBounds(sidebar.removeFromTop(controlHeight));
+    {
+        juce::Rectangle<int> row(0, y, contentWidth, controlHeight);
+        scaleLabel.setBounds(row.removeFromLeft(90));
+        row.removeFromLeft(gapSmall);
+        scaleSelector.setBounds(row);
+        y += controlHeight + gapMedium;
+    }
 
-    sidebar.removeFromTop(8);
+    selectedCellLabel.setBounds(0, y, contentWidth, controlHeight);
+    y += controlHeight + gapMedium;
 
     for (int i = 0; i < kVoiceCalibrationCount; ++i)
     {
         if (!voiceOffsetLabels[i] || !voiceOffsetSliders[i])
             continue;
 
-        auto row = sidebar.removeFromTop(controlHeight);
+        juce::Rectangle<int> row(0, y, contentWidth, controlHeight);
         voiceOffsetLabels[i]->setBounds(row.removeFromLeft(140));
-        row.removeFromLeft(6);
+        row.removeFromLeft(gapSmall);
         voiceOffsetSliders[i]->setBounds(row);
-        sidebar.removeFromTop(6);
+        y += controlHeight + gapSmall;
     }
 
-    sidebar.removeFromTop(6);
+    y += gapMedium;
 
     for (int i = 0; i < kChannelSelectorCount; ++i)
     {
         if (!channelSelectorLabels[i] || !channelSelectors[i])
             continue;
 
-        auto row = sidebar.removeFromTop(controlHeight);
+        juce::Rectangle<int> row(0, y, contentWidth, controlHeight);
         channelSelectorLabels[i]->setBounds(row.removeFromLeft(140));
-        row.removeFromLeft(6);
+        row.removeFromLeft(gapSmall);
         channelSelectors[i]->setBounds(row);
-        sidebar.removeFromTop(6);
+        y += controlHeight + gapSmall;
     }
 
-    sidebar.removeFromTop(6);
-    deviceSelector.setBounds(sidebar);
+    y += gapMedium;
+
+    const int deviceSelectorHeight = 220;
+    deviceSelector.setBounds(0, y, contentWidth, deviceSelectorHeight);
+    y += deviceSelectorHeight + gapMedium;
+
+    sidebarContent.setSize(contentWidth, y);
 
     bounds.removeFromLeft(12);
     gridComponent.setBounds(bounds);
@@ -385,6 +406,10 @@ void MainComponent::initialiseChannelSelectors()
         "Channel 2",
         "Channel 3",
         "Channel 4",
+        "Channel 5",
+        "Channel 6",
+        "Channel 7",
+        "Channel 8",
     };
 
     for (int i = 0; i < kChannelSelectorCount; ++i)
@@ -393,7 +418,7 @@ void MainComponent::initialiseChannelSelectors()
         label->setJustificationType(juce::Justification::centredLeft);
         label->setText(labels[i], juce::dontSendNotification);
         channelSelectorLabels[i] = std::move(label);
-        addAndMakeVisible(*channelSelectorLabels[i]);
+        sidebarContent.addAndMakeVisible(*channelSelectorLabels[i]);
 
         auto combo = std::make_unique<juce::ComboBox>();
         combo->addItem("None", channelSourceToMenuId(ChannelSource::none));
@@ -407,12 +432,16 @@ void MainComponent::initialiseChannelSelectors()
                 updateChannelAssignment(i, channelSelectors[i]->getSelectedId());
         };
         channelSelectors[i] = std::move(combo);
-        addAndMakeVisible(*channelSelectors[i]);
+        sidebarContent.addAndMakeVisible(*channelSelectors[i]);
     }
 
     channelAssignments = {
         ChannelSource::sequencerPitch1,
         ChannelSource::sequencerGate1,
+        ChannelSource::manualCv,
+        ChannelSource::manualCv,
+        ChannelSource::manualCv,
+        ChannelSource::manualCv,
         ChannelSource::manualCv,
         ChannelSource::clockOut,
     };
@@ -552,11 +581,6 @@ void MainComponent::advanceSequencerStep()
     {
         voiceGateSamplesRemaining[0].store(std::max(1, gateHoldSamples));
         voiceGateDigital[0].store(kGateHighVoltage);
-    }
-    else
-    {
-        voiceGateSamplesRemaining[0].store(0);
-        voiceGateDigital[0].store(0.0f);
     }
 
     clockSamplesRemaining.store(std::max(1, clockHoldSamples));
