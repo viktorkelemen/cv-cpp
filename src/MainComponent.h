@@ -55,6 +55,7 @@ private:
     static int channelSourceToMenuId(ChannelSource source);
     static ChannelSource menuIdToChannelSource(int id);
     void updateGateAndClockTimers(int samplesPerBlock);
+    void previewCell(juce::Point<int> cell);
 
     juce::AudioDeviceManager deviceManager;
     juce::Viewport sidebarViewport;

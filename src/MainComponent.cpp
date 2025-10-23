@@ -143,6 +143,7 @@ MainComponent::MainComponent()
     gridComponent.onCellSelected = [this](int x, int y)
     {
         updateSelectedCellInfo({ x, y });
+        previewCell({ x, y });
     };
 
     updateSequencerState(false);
@@ -663,4 +664,25 @@ void MainComponent::updateVoiceCalibration(int index, double semitoneOffset)
     constexpr float voltsPerOctaveDigital = 0.1f;
     constexpr float semitoneToDigital = voltsPerOctaveDigital / 12.0f;
     voiceCalibrationDigital[index].store(static_cast<float>(semitoneOffset) * semitoneToDigital);
+}
+void MainComponent::previewCell(juce::Point<int> cell)
+{
+    if (cell.x < 0 || cell.y < 0)
+        return;
+
+    const int width = gridModel.getWidth();
+    const int height = gridModel.getHeight();
+    if (cell.x >= width || cell.y >= height)
+        return;
+
+    const auto& data = gridModel.cellAt(cell.x, cell.y);
+    const float pitch = cellSemitoneToVoltage(data);
+    voicePitchDigital[0].store(pitch);
+    voiceGateDigital[0].store(kGateHighVoltage);
+    voiceGateSamplesRemaining[0].store(std::max(1, gateHoldSamples));
+    clockDigital.store(0.0f);
+    clockSamplesRemaining.store(0);
+
+    if (channelAssignments[0] == ChannelSource::manualCv)
+        useSequencerOutput.store(false);
 }
