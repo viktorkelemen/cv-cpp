@@ -29,6 +29,8 @@ On macOS the resulting app bundle appears at `build/cv_sender_app_artefacts/Debu
 - Grid cells now show their note name, and the sidebar lets you route each of up to
   eight hardware outputs (e.g. an ES-8) to the sequencer's pitch lane, gate pulses (~8 V),
   clock pulse, or manual CV source with per-voice calibration offsets.
+- Pick the base octave (default C2) so the CV reference lands where you expect on your
+  oscillators; the octave selector shifts both the grid labels and the outgoing voltage.
 
 Extend this by replacing the constant with envelopes, LFO shapes, or other DSP
 blocks, and by exposing more controls in the GUI.

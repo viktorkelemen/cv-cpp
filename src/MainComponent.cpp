@@ -535,14 +535,14 @@ void MainComponent::updateGateAndClockTimers(int samplesPerBlock)
 
 void MainComponent::initialiseOctaveSelector()
 {
-    struct OctaveOption { int id; const char* label; int startOctave; };
+    struct OctaveOption { int id; const char* label; int startOctave; int referenceSemitones; };
     static constexpr std::array<OctaveOption, 6> options = {{
-        { 1, "C0", -2 },
-        { 2, "C1", -1 },
-        { 3, "C2", 0 },
-        { 4, "C3", 1 },
-        { 5, "C4", 2 },
-        { 6, "C5", 3 },
+        { 1, "C0", -2, 0 },
+        { 2, "C1", -1, 12 },
+        { 3, "C2", 0, 24 },
+        { 4, "C3", 1, 36 },
+        { 5, "C4", 2, 48 },
+        { 6, "C5", 3, 60 },
     }};
 
     octaveSelector.clear(juce::dontSendNotification);
@@ -553,8 +553,10 @@ void MainComponent::initialiseOctaveSelector()
     {
         const auto* found = std::find_if(options.begin(), options.end(),
                                          [id](const OctaveOption& opt) { return opt.id == id; });
-        const int startOct = found != std::end(options) ? found->startOctave : 0;
+        const int startOct = found != options.end() ? found->startOctave : 0;
+        const int reference = found != options.end() ? found->referenceSemitones : 24;
         gridModel.setStartOctave(startOct);
+        pitchReferenceSemitones.store(reference);
         gridComponent.refresh();
         updateSelectedCellInfo(gridComponent.getSelectedCell());
     };
@@ -649,7 +651,8 @@ float MainComponent::cellSemitoneToVoltage(const cvseq::GridCell& cell) const
 {
     constexpr float voltsPerOctaveDigital = 0.1f; // digital units per volt in 1V/oct scaling
     constexpr int semitonesPerOctave = 12;
-    return static_cast<float>(cell.semitones) * (voltsPerOctaveDigital / static_cast<float>(semitonesPerOctave));
+    const int reference = pitchReferenceSemitones.load();
+    return static_cast<float>(cell.semitones - reference) * (voltsPerOctaveDigital / static_cast<float>(semitonesPerOctave));
 }
 
 void MainComponent::updateVoiceCalibration(int index, double semitoneOffset)

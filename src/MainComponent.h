@@ -94,6 +94,7 @@ private:
     double currentSampleRate = 48000.0;
     int gateHoldSamples = 480;
     int clockHoldSamples = 240;
+    std::atomic<int> pitchReferenceSemitones { 24 }; // default C2 reference
     std::mt19937 rng;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
