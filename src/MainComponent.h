@@ -43,6 +43,7 @@ private:
     void updateSequencerState(bool isRunning);
     void updateSelectedCellInfo(juce::Point<int> cell);
     void initialiseScaleSelector();
+    void initialiseOctaveSelector();
     void startSequencerPlayback();
     void stopSequencerPlayback();
     void timerCallback() override;
@@ -64,6 +65,8 @@ private:
     juce::TextButton randomizeButton { "Randomize Grid" };
     juce::ComboBox scaleSelector;
     juce::Label scaleLabel;
+    juce::ComboBox octaveSelector;
+    juce::Label octaveLabel;
     juce::Label statusLabel;
     juce::Label selectedCellLabel;
 

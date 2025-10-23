@@ -90,6 +90,13 @@ MainComponent::MainComponent()
     initialiseScaleSelector();
     sidebarContent.addAndMakeVisible(scaleSelector);
 
+    octaveLabel.setText("Base Octave", juce::dontSendNotification);
+    octaveLabel.setJustificationType(juce::Justification::centredLeft);
+    sidebarContent.addAndMakeVisible(octaveLabel);
+
+    initialiseOctaveSelector();
+    sidebarContent.addAndMakeVisible(octaveSelector);
+
     statusLabel.setJustificationType(juce::Justification::centredLeft);
     statusLabel.setText("Audio device idle", juce::dontSendNotification);
     sidebarContent.addAndMakeVisible(statusLabel);
@@ -190,6 +197,14 @@ void MainComponent::resized()
         scaleLabel.setBounds(row.removeFromLeft(90));
         row.removeFromLeft(gapSmall);
         scaleSelector.setBounds(row);
+        y += controlHeight + gapMedium;
+    }
+
+    {
+        juce::Rectangle<int> row(0, y, contentWidth, controlHeight);
+        octaveLabel.setBounds(row.removeFromLeft(120));
+        row.removeFromLeft(gapSmall);
+        octaveSelector.setBounds(row);
         y += controlHeight + gapMedium;
     }
 
@@ -516,6 +531,42 @@ void MainComponent::updateGateAndClockTimers(int samplesPerBlock)
     {
         clockDigital.store(0.0f);
     }
+}
+
+void MainComponent::initialiseOctaveSelector()
+{
+    struct OctaveOption { int id; const char* label; int startOctave; };
+    static constexpr std::array<OctaveOption, 6> options = {{
+        { 1, "C0", -2 },
+        { 2, "C1", -1 },
+        { 3, "C2", 0 },
+        { 4, "C3", 1 },
+        { 5, "C4", 2 },
+        { 6, "C5", 3 },
+    }};
+
+    octaveSelector.clear(juce::dontSendNotification);
+    for (const auto& option : options)
+        octaveSelector.addItem(option.label, option.id);
+
+    auto applyOctave = [this](int id)
+    {
+        const auto* found = std::find_if(options.begin(), options.end(),
+                                         [id](const OctaveOption& opt) { return opt.id == id; });
+        const int startOct = found != std::end(options) ? found->startOctave : 0;
+        gridModel.setStartOctave(startOct);
+        gridComponent.refresh();
+        updateSelectedCellInfo(gridComponent.getSelectedCell());
+    };
+
+    octaveSelector.onChange = [this, applyOctave]()
+    {
+        applyOctave(octaveSelector.getSelectedId());
+    };
+
+    const int defaultId = 3; // C2
+    octaveSelector.setSelectedId(defaultId, juce::dontSendNotification);
+    applyOctave(defaultId);
 }
 
 void MainComponent::startSequencerPlayback()
