@@ -296,6 +296,9 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
         if (auto* channelData = outputChannelData[channel])
             juce::FloatVectorOperations::fill(channelData, juce::jlimit(-1.0f, 1.0f, sampleValue), numSamples);
     }
+
+    if (!isCvModeActive())
+        renderPreviewAudio(outputChannelData, numOutputChannels, numSamples);
 }
 
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
@@ -534,6 +537,51 @@ void MainComponent::updateGateAndClockTimers(int samplesPerBlock)
     }
 }
 
+bool MainComponent::isCvModeActive() const noexcept
+{
+    const auto type = deviceManager.getCurrentDeviceTypeObject();
+    if (type == nullptr)
+        return false;
+
+    const juce::String name = type->getTypeName();
+    return name.containsIgnoreCase("ES-8") || name.containsIgnoreCase("ES8") || name.containsIgnoreCase("ESX");
+}
+
+void MainComponent::renderPreviewAudio(float* const* outputChannelData, int numOutputChannels, int numSamples)
+{
+    if (!previewActive.load())
+        return;
+
+    const float frequency = previewFrequency.load();
+    if (frequency <= 0.0f)
+    {
+        previewActive.store(false);
+        return;
+    }
+
+    const double sampleRate = currentSampleRate > 0.0 ? currentSampleRate : 48000.0;
+    const float phaseIncrement = static_cast<float>((frequency / sampleRate) * juce::MathConstants<double>::twoPi);
+    float phase = previewPhase.load();
+
+    const int channelsToFill = std::min(numOutputChannels, 2);
+    for (int i = 0; i < numSamples; ++i)
+    {
+        const float sample = std::sin(phase) * 0.2f;
+        phase += phaseIncrement;
+        if (phase > juce::MathConstants<float>::twoPi)
+            phase -= juce::MathConstants<float>::twoPi;
+
+        for (int ch = 0; ch < channelsToFill; ++ch)
+        {
+            if (auto* buffer = outputChannelData[ch])
+                buffer[i] += sample;
+        }
+    }
+
+    previewPhase.store(phase);
+    previewActive.store(false);
+}
+
 void MainComponent::initialiseOctaveSelector()
 {
     struct OctaveOption { int id; const char* label; int startOctave; int referenceSemitones; };
@@ -685,4 +733,12 @@ void MainComponent::previewCell(juce::Point<int> cell)
 
     if (channelAssignments[0] == ChannelSource::manualCv)
         useSequencerOutput.store(false);
+
+    if (!isCvModeActive())
+    {
+        const double baseFrequency = 261.63; // C4 reference
+        const double frequency = baseFrequency * std::pow(2.0, static_cast<double>(data.semitones - pitchReferenceSemitones.load()) / 12.0);
+        previewFrequency.store(static_cast<float>(frequency));
+        previewActive.store(true);
+    }
 }

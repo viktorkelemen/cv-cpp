@@ -56,6 +56,8 @@ private:
     static ChannelSource menuIdToChannelSource(int id);
     void updateGateAndClockTimers(int samplesPerBlock);
     void previewCell(juce::Point<int> cell);
+    bool isCvModeActive() const noexcept;
+    void renderPreviewAudio(float* const* outputChannelData, int numOutputChannels, int numSamples);
 
     juce::AudioDeviceManager deviceManager;
     juce::Viewport sidebarViewport;
@@ -96,6 +98,9 @@ private:
     int gateHoldSamples = 480;
     int clockHoldSamples = 240;
     std::atomic<int> pitchReferenceSemitones { 24 }; // default C2 reference
+    std::atomic<float> previewPhase { 0.0f };
+    std::atomic<float> previewFrequency { 0.0f };
+    std::atomic<bool> previewActive { false };
     std::mt19937 rng;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
