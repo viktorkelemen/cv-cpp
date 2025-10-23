@@ -1,0 +1,8 @@
+# Build artifacts
+build/
+
+# Local JUCE checkout
+JUCE/
+
+# macOS metadata
+.DS_Store
