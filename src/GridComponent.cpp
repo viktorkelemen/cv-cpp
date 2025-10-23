@@ -73,6 +73,15 @@ void GridComponent::refresh()
     repaint();
 }
 
+void GridComponent::setPlayheadCell(juce::Point<int> cell)
+{
+    if (playheadCell_ != cell)
+    {
+        playheadCell_ = cell;
+        repaint();
+    }
+}
+
 void GridComponent::handleSelectionEvent(const juce::MouseEvent& event)
 {
     const auto bounds = getLocalBounds();
@@ -113,6 +122,12 @@ void GridComponent::drawGrid(juce::Graphics& g)
             {
                 g.setColour(juce::Colours::yellow);
                 g.drawRect(cellBounds, 2.0f);
+            }
+
+            if (playheadCell_.x == x && playheadCell_.y == y)
+            {
+                g.setColour(juce::Colours::orange.withAlpha(0.9f));
+                g.drawRect(cellBounds.reduced(2.0f), 3.0f);
             }
         }
     }

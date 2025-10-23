@@ -73,6 +73,7 @@ MainComponent::MainComponent()
         gridModel.randomize(rng);
         gridComponent.refresh();
         currentStepIndex = 0;
+        gridComponent.setPlayheadCell({ -1, -1 });
         updateSelectedCellInfo(gridComponent.getSelectedCell());
     };
     addAndMakeVisible(randomizeButton);
@@ -274,6 +275,7 @@ void MainComponent::stopSequencerPlayback()
     useSequencerOutput.store(false);
     sequencerOutputValue.store(0.0f);
     currentStepIndex = 0;
+    gridComponent.setPlayheadCell({ -1, -1 });
 }
 
 void MainComponent::timerCallback()
@@ -307,6 +309,7 @@ void MainComponent::advanceSequencerStep()
 
     sequencerOutputValue.store(output);
     updateSelectedCellInfo({ x, y });
+    gridComponent.setPlayheadCell({ x, y });
 
     currentStepIndex = (currentStepIndex + 1) % totalCells;
 }

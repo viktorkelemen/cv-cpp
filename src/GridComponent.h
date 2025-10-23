@@ -22,6 +22,7 @@ public:
     juce::Point<int> getSelectedCell() const noexcept { return selectedCell_; }
 
     void refresh();
+    void setPlayheadCell(juce::Point<int> cell);
 
     std::function<void(int, int)> onCellSelected;
 
@@ -31,7 +32,7 @@ private:
 
     GridModel& model;
     juce::Point<int> selectedCell_ { -1, -1 };
+    juce::Point<int> playheadCell_ { -1, -1 };
 };
 
 } // namespace cvseq
-
