@@ -316,5 +316,7 @@ void MainComponent::advanceSequencerStep()
 
 float MainComponent::cellSemitoneToVoltage(const cvseq::GridCell& cell) const
 {
-    return static_cast<float>(cell.semitones) / 12.0f;
+    constexpr float voltsPerOctaveDigital = 0.1f; // digital units per volt in 1V/oct scaling
+    constexpr int semitonesPerOctave = 12;
+    return static_cast<float>(cell.semitones) * (voltsPerOctaveDigital / static_cast<float>(semitonesPerOctave));
 }
