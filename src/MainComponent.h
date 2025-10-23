@@ -70,6 +70,10 @@ private:
     juce::Label scaleLabel;
     juce::ComboBox octaveSelector;
     juce::Label octaveLabel;
+    juce::Slider gridWidthSlider;
+    juce::Slider gridHeightSlider;
+    juce::Label gridWidthLabel;
+    juce::Label gridHeightLabel;
     juce::Label statusLabel;
     juce::Label selectedCellLabel;
 

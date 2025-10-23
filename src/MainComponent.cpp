@@ -97,6 +97,34 @@ MainComponent::MainComponent()
     initialiseOctaveSelector();
     sidebarContent.addAndMakeVisible(octaveSelector);
 
+    gridWidthLabel.setText("Grid Width", juce::dontSendNotification);
+    gridWidthLabel.setJustificationType(juce::Justification::centredLeft);
+    sidebarContent.addAndMakeVisible(gridWidthLabel);
+
+    gridWidthSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    gridWidthSlider.setRange(2, 64, 1);
+    gridWidthSlider.setValue(gridModel.getWidth());
+    gridWidthSlider.onValueChange = [this]()
+    {
+        gridModel.resize(static_cast<int>(gridWidthSlider.getValue()), gridModel.getHeight());
+        gridComponent.refresh();
+    };
+    sidebarContent.addAndMakeVisible(gridWidthSlider);
+
+    gridHeightLabel.setText("Grid Height", juce::dontSendNotification);
+    gridHeightLabel.setJustificationType(juce::Justification::centredLeft);
+    sidebarContent.addAndMakeVisible(gridHeightLabel);
+
+    gridHeightSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    gridHeightSlider.setRange(2, 64, 1);
+    gridHeightSlider.setValue(gridModel.getHeight());
+    gridHeightSlider.onValueChange = [this]()
+    {
+        gridModel.resize(gridModel.getWidth(), static_cast<int>(gridHeightSlider.getValue()));
+        gridComponent.refresh();
+    };
+    sidebarContent.addAndMakeVisible(gridHeightSlider);
+
     statusLabel.setJustificationType(juce::Justification::centredLeft);
     statusLabel.setText("Audio device idle", juce::dontSendNotification);
     sidebarContent.addAndMakeVisible(statusLabel);
@@ -154,7 +182,7 @@ MainComponent::MainComponent()
 
     deviceManager.addAudioCallback(this);
 
-    setSize(980, 640);
+    setSize(1280, 800);
 }
 
 MainComponent::~MainComponent()
@@ -206,6 +234,22 @@ void MainComponent::resized()
         octaveLabel.setBounds(row.removeFromLeft(120));
         row.removeFromLeft(gapSmall);
         octaveSelector.setBounds(row);
+        y += controlHeight + gapMedium;
+    }
+
+    {
+        juce::Rectangle<int> row(0, y, contentWidth, controlHeight);
+        gridWidthLabel.setBounds(row.removeFromLeft(120));
+        row.removeFromLeft(gapSmall);
+        gridWidthSlider.setBounds(row);
+        y += controlHeight + gapSmall;
+    }
+
+    {
+        juce::Rectangle<int> row(0, y, contentWidth, controlHeight);
+        gridHeightLabel.setBounds(row.removeFromLeft(120));
+        row.removeFromLeft(gapSmall);
+        gridHeightSlider.setBounds(row);
         y += controlHeight + gapMedium;
     }
 
