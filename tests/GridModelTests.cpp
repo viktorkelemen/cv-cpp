@@ -69,6 +69,12 @@ int main()
         const GridCell& preserved = model.cellAt(0, 0);
         expect(within(preserved.probability, 0.0f, 1.0f), "Preserved cell probability invalid after resize");
 
+        model.setStartOctave(1);
+        model.setOctaveRange(2);
+        model.reset();
+        const GridCell& highCell = model.cellAt(0, 0);
+        expect(highCell.semitones >= 12, "Start octave adjustment should raise semitone values");
+
         model.setBaseBpm(60.0);
         model.start();
         expect(std::abs(model.getCurrentBpm() - 60.0) < 1e-6, "Current BPM should match base after start");
@@ -85,4 +91,3 @@ int main()
     }
     return 0;
 }
-

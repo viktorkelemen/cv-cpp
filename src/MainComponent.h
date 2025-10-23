@@ -8,7 +8,8 @@
 #include "GridModel.h"
 
 class MainComponent final : public juce::Component,
-                            private juce::AudioIODeviceCallback
+                            private juce::AudioIODeviceCallback,
+                            private juce::Timer
 {
 public:
     MainComponent();
@@ -30,6 +31,11 @@ private:
     void updateSequencerState(bool isRunning);
     void updateSelectedCellInfo(juce::Point<int> cell);
     void initialiseScaleSelector();
+    void startSequencerPlayback();
+    void stopSequencerPlayback();
+    void timerCallback() override;
+    void advanceSequencerStep();
+    float cellSemitoneToVoltage(const cvseq::GridCell& cell) const;
 
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
@@ -44,6 +50,9 @@ private:
     cvseq::GridModel gridModel;
     cvseq::GridComponent gridComponent;
     std::atomic<float> outputValue { 0.0f };
+    std::atomic<float> sequencerOutputValue { 0.0f };
+    std::atomic<bool> useSequencerOutput { false };
+    int currentStepIndex = 0;
     std::mt19937 rng;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)

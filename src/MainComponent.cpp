@@ -1,13 +1,15 @@
 #include "MainComponent.h"
 
 #include <algorithm>
-#include <algorithm>
 #include <array>
+#include <cmath>
 #include <exception>
+#include <random>
 
 namespace
 {
 constexpr float kHighVoltageValue = 1.0f;  // Represents +1.0 (depends on interface scaling)
+constexpr int kStepsPerBeat = 4;            // 16th-note grid
 
 struct ScaleDescriptor
 {
@@ -52,9 +54,15 @@ MainComponent::MainComponent()
     {
         const bool shouldRun = startSequencerButton.getToggleState();
         if (shouldRun)
+        {
             gridModel.start();
+            startSequencerPlayback();
+        }
         else
+        {
             gridModel.stop();
+            stopSequencerPlayback();
+        }
 
         updateSequencerState(shouldRun);
     };
@@ -64,6 +72,7 @@ MainComponent::MainComponent()
     {
         gridModel.randomize(rng);
         gridComponent.refresh();
+        currentStepIndex = 0;
         updateSelectedCellInfo(gridComponent.getSelectedCell());
     };
     addAndMakeVisible(randomizeButton);
@@ -102,6 +111,7 @@ MainComponent::MainComponent()
 
 MainComponent::~MainComponent()
 {
+    stopTimer();
     deviceManager.removeAudioCallback(this);
 }
 
@@ -146,7 +156,8 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* /*input
                                                      int numSamples,
                                                      const juce::AudioIODeviceCallbackContext& /*context*/)
 {
-    const auto value = outputValue.load();
+    const float value = useSequencerOutput.load() ? sequencerOutputValue.load()
+                                                  : outputValue.load();
 
     for (int channel = 0; channel < numOutputChannels; ++channel)
     {
@@ -244,4 +255,63 @@ void MainComponent::initialiseScaleSelector()
         scaleSelector.setSelectedId(kScaleOptions.front().id, juce::dontSendNotification);
         applyScale(kScaleOptions.front().id);
     }
+}
+
+void MainComponent::startSequencerPlayback()
+{
+    const double bpm = std::max(20.0, gridModel.getCurrentBpm());
+    const double intervalMs = std::max(1.0, 60000.0 / (bpm * static_cast<double>(kStepsPerBeat)));
+
+    currentStepIndex = 0;
+    useSequencerOutput.store(true);
+    advanceSequencerStep();
+    startTimer(static_cast<int>(std::round(intervalMs)));
+}
+
+void MainComponent::stopSequencerPlayback()
+{
+    stopTimer();
+    useSequencerOutput.store(false);
+    sequencerOutputValue.store(0.0f);
+    currentStepIndex = 0;
+}
+
+void MainComponent::timerCallback()
+{
+    advanceSequencerStep();
+}
+
+void MainComponent::advanceSequencerStep()
+{
+    const int width = std::max(1, gridModel.getWidth());
+    const int height = std::max(1, gridModel.getHeight());
+    const int totalCells = width * height;
+
+    if (totalCells <= 0)
+        return;
+
+    currentStepIndex = currentStepIndex % totalCells;
+    const int step = currentStepIndex;
+    const int x = step % width;
+    const int y = step / width;
+
+    const auto& cell = gridModel.cellAt(x, y);
+
+    float output = 0.0f;
+    if (cell.active)
+    {
+        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+        if (dist(rng) <= cell.probability)
+            output = cellSemitoneToVoltage(cell);
+    }
+
+    sequencerOutputValue.store(output);
+    updateSelectedCellInfo({ x, y });
+
+    currentStepIndex = (currentStepIndex + 1) % totalCells;
+}
+
+float MainComponent::cellSemitoneToVoltage(const cvseq::GridCell& cell) const
+{
+    return static_cast<float>(cell.semitones) / 12.0f;
 }
