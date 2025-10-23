@@ -2,6 +2,8 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
+#include <array>
+#include <memory>
 #include <random>
 
 #include "GridComponent.h"
@@ -36,6 +38,7 @@ private:
     void timerCallback() override;
     void advanceSequencerStep();
     float cellSemitoneToVoltage(const cvseq::GridCell& cell) const;
+    void updateVoiceCalibration(int index, double semitoneOffset);
 
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
@@ -53,6 +56,10 @@ private:
     std::atomic<float> sequencerOutputValue { 0.0f };
     std::atomic<bool> useSequencerOutput { false };
     int currentStepIndex = 0;
+    static constexpr int kVoiceCalibrationCount = 3;
+    std::array<std::unique_ptr<juce::Slider>, kVoiceCalibrationCount> voiceOffsetSliders;
+    std::array<std::unique_ptr<juce::Label>, kVoiceCalibrationCount> voiceOffsetLabels;
+    std::array<std::atomic<float>, kVoiceCalibrationCount> voiceCalibrationDigital {};
     std::mt19937 rng;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)

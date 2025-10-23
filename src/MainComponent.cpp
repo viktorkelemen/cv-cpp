@@ -93,6 +93,35 @@ MainComponent::MainComponent()
     selectedCellLabel.setText("Selected cell: none", juce::dontSendNotification);
     addAndMakeVisible(selectedCellLabel);
 
+    for (int i = 0; i < kVoiceCalibrationCount; ++i)
+    {
+        voiceCalibrationDigital[i].store(0.0f);
+
+        auto label = std::make_unique<juce::Label>();
+        label->setJustificationType(juce::Justification::centredLeft);
+        label->setText("Voice " + juce::String(i + 1) + " Offset", juce::dontSendNotification);
+        voiceOffsetLabels[i] = std::move(label);
+        addAndMakeVisible(*voiceOffsetLabels[i]);
+
+        auto slider = std::make_unique<juce::Slider>();
+        slider->setSliderStyle(juce::Slider::LinearHorizontal);
+        slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 70, 20);
+        slider->setRange(-1.0, 1.0, 0.0001);
+        slider->setNumDecimalPlacesToDisplay(3);
+        slider->setTextValueSuffix(" st");
+        slider->setValue(0.0);
+        slider->setTooltip("Fine-tune calibration in semitones for output " + juce::String(i + 1));
+        slider->onValueChange = [this, i]()
+        {
+            if (voiceOffsetSliders[i])
+                updateVoiceCalibration(i, voiceOffsetSliders[i]->getValue());
+        };
+        voiceOffsetSliders[i] = std::move(slider);
+        addAndMakeVisible(*voiceOffsetSliders[i]);
+
+        updateVoiceCalibration(i, 0.0);
+    }
+
     addAndMakeVisible(gridComponent);
     gridComponent.onCellSelected = [this](int x, int y)
     {
@@ -143,7 +172,21 @@ void MainComponent::resized()
     sidebar.removeFromTop(8);
     selectedCellLabel.setBounds(sidebar.removeFromTop(controlHeight));
 
-    sidebar.removeFromTop(10);
+    sidebar.removeFromTop(8);
+
+    for (int i = 0; i < kVoiceCalibrationCount; ++i)
+    {
+        if (!voiceOffsetLabels[i] || !voiceOffsetSliders[i])
+            continue;
+
+        auto row = sidebar.removeFromTop(controlHeight);
+        voiceOffsetLabels[i]->setBounds(row.removeFromLeft(140));
+        row.removeFromLeft(6);
+        voiceOffsetSliders[i]->setBounds(row);
+        sidebar.removeFromTop(6);
+    }
+
+    sidebar.removeFromTop(6);
     deviceSelector.setBounds(sidebar);
 
     bounds.removeFromLeft(12);
@@ -157,13 +200,23 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* /*input
                                                      int numSamples,
                                                      const juce::AudioIODeviceCallbackContext& /*context*/)
 {
-    const float value = useSequencerOutput.load() ? sequencerOutputValue.load()
-                                                  : outputValue.load();
+    const bool sequencerActive = useSequencerOutput.load();
+    const float baseValue = sequencerActive ? sequencerOutputValue.load()
+                                            : outputValue.load();
 
     for (int channel = 0; channel < numOutputChannels; ++channel)
     {
         if (auto* channelData = outputChannelData[channel])
-            juce::FloatVectorOperations::fill(channelData, value, numSamples);
+        {
+            float finalValue = baseValue;
+            if (sequencerActive)
+            {
+                const int index = std::clamp(channel, 0, kVoiceCalibrationCount - 1);
+                finalValue += voiceCalibrationDigital[index].load();
+            }
+            finalValue = juce::jlimit(-1.0f, 1.0f, finalValue);
+            juce::FloatVectorOperations::fill(channelData, finalValue, numSamples);
+        }
     }
 }
 
@@ -319,4 +372,14 @@ float MainComponent::cellSemitoneToVoltage(const cvseq::GridCell& cell) const
     constexpr float voltsPerOctaveDigital = 0.1f; // digital units per volt in 1V/oct scaling
     constexpr int semitonesPerOctave = 12;
     return static_cast<float>(cell.semitones) * (voltsPerOctaveDigital / static_cast<float>(semitonesPerOctave));
+}
+
+void MainComponent::updateVoiceCalibration(int index, double semitoneOffset)
+{
+    if (index < 0 || index >= kVoiceCalibrationCount)
+        return;
+
+    constexpr float voltsPerOctaveDigital = 0.1f;
+    constexpr float semitoneToDigital = voltsPerOctaveDigital / 12.0f;
+    voiceCalibrationDigital[index].store(static_cast<float>(semitoneOffset) * semitoneToDigital);
 }
