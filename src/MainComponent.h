@@ -104,7 +104,7 @@ private:
     std::atomic<int> pitchReferenceSemitones { 24 }; // default C2 reference
     std::atomic<float> previewPhase { 0.0f };
     std::atomic<float> previewFrequency { 0.0f };
-    std::atomic<bool> previewActive { false };
+    std::atomic<int> previewSamplesRemaining { 0 };
     std::mt19937 rng;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)

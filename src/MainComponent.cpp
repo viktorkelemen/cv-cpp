@@ -593,13 +593,14 @@ bool MainComponent::isCvModeActive() const noexcept
 
 void MainComponent::renderPreviewAudio(float* const* outputChannelData, int numOutputChannels, int numSamples)
 {
-    if (!previewActive.load())
+    int samplesLeft = previewSamplesRemaining.load();
+    if (samplesLeft <= 0)
         return;
 
     const float frequency = previewFrequency.load();
     if (frequency <= 0.0f)
     {
-        previewActive.store(false);
+        previewSamplesRemaining.store(0);
         return;
     }
 
@@ -608,9 +609,13 @@ void MainComponent::renderPreviewAudio(float* const* outputChannelData, int numO
     float phase = previewPhase.load();
 
     const int channelsToFill = std::min(numOutputChannels, 2);
-    for (int i = 0; i < numSamples; ++i)
+    float localAmplitude = 0.25f;
+    int processed = 0;
+
+    for (int i = 0; i < numSamples && samplesLeft > 0; ++i, --samplesLeft, ++processed)
     {
-        const float sample = std::sin(phase) * 0.2f;
+        const float envelope = samplesLeft < static_cast<int>(sampleRate * 0.02) ? static_cast<float>(samplesLeft) / static_cast<float>(sampleRate * 0.02f) : 1.0f;
+        const float sample = std::sin(phase) * (localAmplitude * envelope);
         phase += phaseIncrement;
         if (phase > juce::MathConstants<float>::twoPi)
             phase -= juce::MathConstants<float>::twoPi;
@@ -623,7 +628,7 @@ void MainComponent::renderPreviewAudio(float* const* outputChannelData, int numO
     }
 
     previewPhase.store(phase);
-    previewActive.store(false);
+    previewSamplesRemaining.store(samplesLeft);
 }
 
 void MainComponent::initialiseOctaveSelector()
@@ -780,9 +785,9 @@ void MainComponent::previewCell(juce::Point<int> cell)
 
     if (!isCvModeActive())
     {
-        const double baseFrequency = 261.63; // C4 reference
-        const double frequency = baseFrequency * std::pow(2.0, static_cast<double>(data.semitones - pitchReferenceSemitones.load()) / 12.0);
+        const double baseFrequency = 16.351597831287414; // C0 in Hz
+        const double frequency = baseFrequency * std::pow(2.0, static_cast<double>(data.semitones) / 12.0);
         previewFrequency.store(static_cast<float>(frequency));
-        previewActive.store(true);
+        previewSamplesRemaining.store(static_cast<int>(currentSampleRate * 0.25)); // ~250ms tone
     }
 }
