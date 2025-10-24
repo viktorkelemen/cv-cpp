@@ -307,6 +307,8 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
 
     const float manualValue = outputValue.load();
     const bool sequencerActive = useSequencerOutput.load();
+    const bool previewActiveCv = previewCvActive.load();
+    const bool cvActive = sequencerActive || previewActiveCv;
     const float voicePitch = voicePitchDigital[0].load() + voiceCalibrationDigital[0].load();
     const float voiceGate = voiceGateDigital[0].load();
     const float clockValue = clockDigital.load();
@@ -323,13 +325,13 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
                 sampleValue = manualValue;
                 break;
             case ChannelSource::sequencerPitch1:
-                sampleValue = sequencerActive ? voicePitch : 0.0f;
+                sampleValue = cvActive ? voicePitch : 0.0f;
                 break;
             case ChannelSource::sequencerGate1:
-                sampleValue = sequencerActive ? voiceGate : 0.0f;
+                sampleValue = cvActive ? voiceGate : 0.0f;
                 break;
             case ChannelSource::clockOut:
-                sampleValue = sequencerActive ? clockValue : 0.0f;
+                sampleValue = (cvActive && sequencerActive) ? clockValue : 0.0f;
                 break;
             case ChannelSource::none:
             default:
@@ -561,10 +563,14 @@ void MainComponent::updateGateAndClockTimers(int samplesPerBlock)
             voiceGateDigital[i].store(kGateHighVoltage);
             const int newRemaining = std::max(0, remaining - samplesPerBlock);
             voiceGateSamplesRemaining[i].store(newRemaining);
+            if (i == 0 && newRemaining == 0)
+                previewCvActive.store(false);
         }
         else
         {
             voiceGateDigital[i].store(0.0f);
+            if (i == 0)
+                previewCvActive.store(false);
         }
     }
 
@@ -695,6 +701,8 @@ void MainComponent::stopSequencerPlayback()
     }
     clockSamplesRemaining.store(0);
     clockDigital.store(0.0f);
+    previewCvActive.store(false);
+    previewSamplesRemaining.store(0);
 }
 
 void MainComponent::timerCallback()
@@ -783,11 +791,17 @@ void MainComponent::previewCell(juce::Point<int> cell)
     if (channelAssignments[0] == ChannelSource::manualCv)
         useSequencerOutput.store(false);
 
-    if (!isCvModeActive())
+    if (isCvModeActive())
+    {
+        previewCvActive.store(true);
+        previewSamplesRemaining.store(0);
+    }
+    else
     {
         const double baseFrequency = 16.351597831287414; // C0 in Hz
         const double frequency = baseFrequency * std::pow(2.0, static_cast<double>(data.semitones) / 12.0);
         previewFrequency.store(static_cast<float>(frequency));
         previewSamplesRemaining.store(static_cast<int>(currentSampleRate * 0.25)); // ~250ms tone
+        previewCvActive.store(false);
     }
 }

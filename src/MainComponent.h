@@ -105,6 +105,7 @@ private:
     std::atomic<float> previewPhase { 0.0f };
     std::atomic<float> previewFrequency { 0.0f };
     std::atomic<int> previewSamplesRemaining { 0 };
+    std::atomic<bool> previewCvActive { false };
     std::mt19937 rng;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
