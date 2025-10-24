@@ -34,7 +34,7 @@ constexpr std::array<ScaleDescriptor, 8> kScaleOptions = {{
 MainComponent::MainComponent()
     : deviceSelector(deviceManager,
                      0, 0,   // no inputs
-                     1, 2,   // allow mono or stereo outs
+                     1, 8,   // allow 1-8 outputs for ES-8
                      false, false, true, false),
       gridComponent(gridModel),
       rng(std::random_device{}())
@@ -176,13 +176,29 @@ MainComponent::MainComponent()
 
     updateSequencerState(false);
 
-    auto initialiseError = deviceManager.initialise(0, 1, nullptr, true);
+    // Try to set ES-8 as the default device type if available
+    bool foundES8 = false;
+    for (auto* type : deviceManager.getAvailableDeviceTypes())
+    {
+        if (type->getTypeName().containsIgnoreCase("ES-8") ||
+            type->getTypeName().containsIgnoreCase("ES8") ||
+            type->getTypeName().containsIgnoreCase("ESX"))
+        {
+            deviceManager.setCurrentAudioDeviceType(type->getTypeName(), true);
+            foundES8 = true;
+            break;
+        }
+    }
+
+    // Use 8 channels for ES8, 2 for regular audio devices
+    const int numOutputChannels = foundES8 ? 8 : 2;
+    auto initialiseError = deviceManager.initialise(0, numOutputChannels, nullptr, true);
     if (initialiseError.isNotEmpty())
         statusLabel.setText("Audio init error: " + initialiseError, juce::dontSendNotification);
 
     deviceManager.addAudioCallback(this);
 
-    setSize(1280, 800);
+    setSize(1600, 900);
 }
 
 MainComponent::~MainComponent()
@@ -692,7 +708,7 @@ void MainComponent::stopSequencerPlayback()
     useSequencerOutput.store(false);
     sequencerOutputValue.store(0.0f);
     currentStepIndex = 0;
-    gridComponent.setPlayheadCell({ -1, -1 });
+    // Don't clear playhead - keep it at last position
 
     for (int i = 0; i < kVoiceCalibrationCount; ++i)
     {
