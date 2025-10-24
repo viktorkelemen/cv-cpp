@@ -63,6 +63,7 @@ private:
     juce::Viewport sidebarViewport;
     juce::Component sidebarContent;
     juce::AudioDeviceSelectorComponent deviceSelector;
+    juce::TextButton testAudioButton { "Test Audio" };
     juce::TextButton sendCvButton { "Send CV" };
     juce::TextButton startSequencerButton { "Start Sequencer" };
     juce::TextButton randomizeButton { "Randomize Grid" };

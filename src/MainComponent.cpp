@@ -45,6 +45,15 @@ MainComponent::MainComponent()
 
     sidebarContent.addAndMakeVisible(deviceSelector);
 
+    testAudioButton.onClick = [this]()
+    {
+        // Play C4 (MIDI note 60, 261.626 Hz) for 500ms
+        const double c4Frequency = 261.626;
+        previewFrequency.store(static_cast<float>(c4Frequency));
+        previewSamplesRemaining.store(static_cast<int>(currentSampleRate * 0.5)); // 500ms
+    };
+    sidebarContent.addAndMakeVisible(testAudioButton);
+
     sendCvButton.setClickingTogglesState(true);
     sendCvButton.onClick = [this]()
     {
@@ -318,7 +327,10 @@ void MainComponent::resized()
 
     const int deviceSelectorHeight = 220;
     deviceSelector.setBounds(0, y, contentWidth, deviceSelectorHeight);
-    y += deviceSelectorHeight + gapMedium;
+    y += deviceSelectorHeight + gapSmall;
+
+    testAudioButton.setBounds(0, y, contentWidth, controlHeight);
+    y += controlHeight + gapMedium;
 
     sidebarContent.setSize(contentWidth, y);
 
