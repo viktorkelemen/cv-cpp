@@ -176,25 +176,41 @@ MainComponent::MainComponent()
 
     updateSequencerState(false);
 
-    // Try to set ES-8 as the default device type if available
+    // Initialize with max channels first
+    auto initialiseError = deviceManager.initialise(0, 8, nullptr, true);
+    if (initialiseError.isNotEmpty())
+        statusLabel.setText("Audio init error: " + initialiseError, juce::dontSendNotification);
+
+    // Try to find and set ES-8 as the output device
     bool foundES8 = false;
-    for (auto* type : deviceManager.getAvailableDeviceTypes())
+    if (auto* currentType = deviceManager.getCurrentDeviceTypeObject())
     {
-        if (type->getTypeName().containsIgnoreCase("ES-8") ||
-            type->getTypeName().containsIgnoreCase("ES8") ||
-            type->getTypeName().containsIgnoreCase("ESX"))
+        auto outputDevices = currentType->getDeviceNames(false); // false = output devices
+        for (const auto& deviceName : outputDevices)
         {
-            deviceManager.setCurrentAudioDeviceType(type->getTypeName(), true);
-            foundES8 = true;
-            break;
+            if (deviceName.containsIgnoreCase("ES-8") ||
+                deviceName.containsIgnoreCase("ES8") ||
+                deviceName.containsIgnoreCase("ESX"))
+            {
+                juce::AudioDeviceManager::AudioDeviceSetup setup;
+                deviceManager.getAudioDeviceSetup(setup);
+                setup.outputDeviceName = deviceName;
+                deviceManager.setAudioDeviceSetup(setup, true);
+                foundES8 = true;
+                break;
+            }
         }
     }
 
-    // Use 8 channels for ES8, 2 for regular audio devices
-    const int numOutputChannels = foundES8 ? 8 : 2;
-    auto initialiseError = deviceManager.initialise(0, numOutputChannels, nullptr, true);
-    if (initialiseError.isNotEmpty())
-        statusLabel.setText("Audio init error: " + initialiseError, juce::dontSendNotification);
+    // Reinitialize with correct channel count for the device
+    if (!foundES8)
+    {
+        // If not ES-8, reinitialize with 2 channels for regular audio devices
+        deviceManager.closeAudioDevice();
+        initialiseError = deviceManager.initialise(0, 2, nullptr, true);
+        if (initialiseError.isNotEmpty())
+            statusLabel.setText("Audio init error: " + initialiseError, juce::dontSendNotification);
+    }
 
     deviceManager.addAudioCallback(this);
 
